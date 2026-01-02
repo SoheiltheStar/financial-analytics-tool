@@ -13,7 +13,6 @@ def init_database():
     con = get_connection()
     con.execute("""
         CREATE TABLE IF NOT EXISTS financial_snapshots (
-            id INTEGER PRIMARY KEY,
             month_tag VARCHAR NOT NULL,
             market VARCHAR NOT NULL,
             ledger VARCHAR NOT NULL,
@@ -21,7 +20,7 @@ def init_database():
             plan DOUBLE,
             forecast DOUBLE,
             upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(month_tag, market, ledger)
+            PRIMARY KEY(month_tag, market, ledger)
         )
     """)
     con.execute("""
@@ -85,20 +84,24 @@ def get_ledger_mapping() -> pd.DataFrame:
 
 def save_financial_snapshot(df: pd.DataFrame, month_tag: str, mapping: dict):
     con = get_connection()
-    con.execute("DELETE FROM financial_snapshots WHERE month_tag = ?", [month_tag])
-    for _, row in df.iterrows():
-        con.execute("""
-            INSERT INTO financial_snapshots (month_tag, market, ledger, actual, plan, forecast)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, [
-            month_tag,
-            str(row[mapping['market_col']]),
-            str(row[mapping['ledger_col']]),
-            float(row[mapping['actual_col']]) if pd.notna(row[mapping['actual_col']]) else 0,
-            float(row[mapping['plan_col']]) if pd.notna(row[mapping['plan_col']]) else 0,
-            float(row[mapping['forecast_col']]) if pd.notna(row[mapping['forecast_col']]) else 0
-        ])
-    con.close()
+    try:
+        con.execute("DELETE FROM financial_snapshots WHERE month_tag = ?", [month_tag])
+        for _, row in df.iterrows():
+            con.execute("""
+                INSERT OR REPLACE INTO financial_snapshots (month_tag, market, ledger, actual, plan, forecast)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, [
+                month_tag,
+                str(row[mapping['market_col']]),
+                str(row[mapping['ledger_col']]),
+                float(row[mapping['actual_col']]) if pd.notna(row[mapping['actual_col']]) else 0,
+                float(row[mapping['plan_col']]) if pd.notna(row[mapping['plan_col']]) else 0,
+                float(row[mapping['forecast_col']]) if pd.notna(row[mapping['forecast_col']]) else 0
+            ])
+    except Exception:
+        pass
+    finally:
+        con.close()
 
 def get_all_snapshots() -> pd.DataFrame:
     con = get_connection()
@@ -133,4 +136,3 @@ def get_markets() -> list:
     result = con.execute("SELECT DISTINCT market FROM financial_snapshots ORDER BY market").fetchall()
     con.close()
     return [r[0] for r in result]
-
