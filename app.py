@@ -131,8 +131,15 @@ st.markdown("""
 
 db.init_database()
 
-if not db.get_available_months():
-    load_demo_data()
+if 'demo_loaded' not in st.session_state:
+    st.session_state.demo_loaded = False
+
+if not st.session_state.demo_loaded and not db.get_available_months():
+    try:
+        load_demo_data()
+        st.session_state.demo_loaded = True
+    except Exception:
+        st.session_state.demo_loaded = True
 
 def export_chart_to_png(fig, filename):
     img_bytes = fig.to_image(format="png", width=1200, height=600, scale=2)
